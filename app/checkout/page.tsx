@@ -335,12 +335,69 @@ export default function CheckoutPage() {
               // Don't include order_id in test mode - this avoids the API validation
               handler: function (response: any) {
                 console.log("Test payment response:", response);
-                toast({
-                  title: "Test Payment Successful",
-                  description: "This was a test payment. In production, a real payment would be processed.",
-                });
-                dispatch(clearCart());
-                router.push("/orders");
+                
+                // Properly verify payment even in test mode
+                const verifyTestPayment = async () => {
+                  try {
+                    // Create a test payment verification payload
+                    const verificationPayload = {
+                      orderId: order.id,
+                      paymentId: `test_pay_${Date.now()}`,
+                      signature: `test_sig_${Date.now()}`
+                    };
+                    
+                    console.log("Verifying test payment with payload:", verificationPayload);
+                    
+                    // Call the verifyPayment mutation
+                    const verifyResponse = await fetch('/api/graphql', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        query: `
+                          mutation VerifyPayment($input: PaymentVerificationInput!) {
+                            verifyPayment(input: $input) {
+                              success
+                              message
+                              orderId
+                            }
+                          }
+                        `,
+                        variables: { input: verificationPayload },
+                      }),
+                    });
+                    
+                    const result = await verifyResponse.json();
+                    console.log("Test payment verification result:", result);
+                    
+                    if (result.data?.verifyPayment?.success) {
+                      toast({
+                        title: "Test Payment Successful",
+                        description: "This was a test payment with proper verification."
+                      });
+                      router.push("/orders");
+                    } else {
+                      toast({
+                        title: "Test Payment Error",
+                        description: result.data?.verifyPayment?.message || "Verification failed",
+                        variant: "destructive"
+                      });
+                      setIsLoading(false);
+                    }
+                  } catch (error) {
+                    console.error("Error verifying test payment:", error);
+                    toast({
+                      title: "Test Payment Error",
+                      description: "Failed to verify test payment",
+                      variant: "destructive"
+                    });
+                    setIsLoading(false);
+                  }
+                };
+                
+                // Execute the verification
+                verifyTestPayment();
               },
               prefill: {
                 name: selectedAddress.name,
@@ -455,7 +512,7 @@ export default function CheckoutPage() {
                         title: "Success",
                         description: "Payment successful! Your order has been placed.",
                       });
-                      dispatch(clearCart());
+                      // The cart will be cleared server-side after payment verification
                       router.push("/orders");
                       return;
                     } else if (json.errors) {
@@ -486,7 +543,7 @@ export default function CheckoutPage() {
                       title: "Success",
                       description: "Payment successful! Your order has been placed.",
                     });
-                    dispatch(clearCart());
+                    // The cart will be cleared server-side after payment verification and shipping processing
                     router.push("/orders");
                   } else {
                     toast({
@@ -565,7 +622,7 @@ export default function CheckoutPage() {
             title: "Success",
             description: "Order placed successfully!",
           });
-          dispatch(clearCart());
+          // The cart will be cleared server-side after order and shipping processing
           router.push("/orders");
         }
       } catch (error) {

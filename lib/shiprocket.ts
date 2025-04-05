@@ -57,6 +57,63 @@ class ShiprocketAPI {
       const tokenValue = await this.getToken();
       console.log("Token obtained successfully, creating Shiprocket order");
 
+      // Ensure payment_method is correctly set for online orders
+      if (orderData.payment_method === "Prepaid") {
+        console.log("Setting payment method to Prepaid for online order");
+        // Make sure this exact format is used - required by Shiprocket
+        orderData.payment_method = "Prepaid";
+      }
+      
+      // Validate and fix required fields
+      const requiredFields = [
+        'order_id', 'order_date', 'pickup_location', 
+        'billing_customer_name', 'billing_address', 'billing_city', 
+        'billing_state', 'billing_pincode', 'billing_country', 
+        'billing_email', 'billing_phone', 'shipping_customer_name',
+        'shipping_address', 'shipping_city', 'shipping_state',
+        'shipping_pincode', 'shipping_country', 'shipping_email',
+        'shipping_phone', 'order_items'
+      ];
+      
+      // Check all required fields exist
+      const missingFields = requiredFields.filter(field => !orderData[field]);
+      if (missingFields.length > 0) {
+        console.error("Missing required fields:", missingFields);
+      }
+      
+      // Ensure numeric values are sent as numbers, not strings
+      if (orderData.shipping_charges) orderData.shipping_charges = Number(orderData.shipping_charges);
+      if (orderData.giftwrap_charges) orderData.giftwrap_charges = Number(orderData.giftwrap_charges);
+      if (orderData.transaction_charges) orderData.transaction_charges = Number(orderData.transaction_charges);
+      if (orderData.total_discount) orderData.total_discount = Number(orderData.total_discount);
+      if (orderData.sub_total) orderData.sub_total = Number(orderData.sub_total);
+      if (orderData.length) orderData.length = Number(orderData.length);
+      if (orderData.breadth) orderData.breadth = Number(orderData.breadth);
+      if (orderData.height) orderData.height = Number(orderData.height);
+      if (orderData.weight) orderData.weight = Number(orderData.weight);
+      
+      // Ensure order_items are valid
+      if (orderData.order_items && Array.isArray(orderData.order_items)) {
+        orderData.order_items = orderData.order_items.map((item: any) => ({
+          ...item,
+          units: Number(item.units),
+          selling_price: Number(item.selling_price),
+          discount: Number(item.discount || 0),
+          tax: Number(item.tax || 0)
+        }));
+      }
+      
+      // Add channel_id if missing (required by Shiprocket)
+      if (!orderData.channel_id) {
+        orderData.channel_id = "custom";
+      }
+      
+      // Ensure order_date is in YYYY-MM-DD format
+      if (orderData.order_date && !/^\d{4}-\d{2}-\d{2}$/.test(orderData.order_date)) {
+        const date = new Date(orderData.order_date);
+        orderData.order_date = date.toISOString().split('T')[0];
+      }
+
       // Log the request data for debugging
       console.log("Sending to Shiprocket:", JSON.stringify(orderData, null, 2));
 
@@ -163,6 +220,22 @@ class ShiprocketAPI {
               throw retryError;
             }
           }
+        } 
+        // Handle other 422 validation errors
+        else if (error.response.status === 422) {
+          console.error("Shiprocket validation error (422):", JSON.stringify(error.response.data, null, 2));
+          
+          // Try to extract specific field validation errors
+          if (error.response.data && error.response.data.errors) {
+            console.error("Validation errors by field:", error.response.data.errors);
+          }
+          
+          // If there's a message in the response, include it in the error
+          const errorMessage = error.response.data && error.response.data.message 
+            ? error.response.data.message 
+            : "Shiprocket validation error";
+            
+          throw new Error(errorMessage);
         }
       }
       throw error;
