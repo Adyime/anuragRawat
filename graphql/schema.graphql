@@ -1,0 +1,88 @@
+type Query {
+  # User's purchased e-books
+  myEbooks: [OrderItem!]!
+}
+
+type Mutation {
+  createOrder(input: CreateOrderInput!): Order!
+  verifyPayment(input: PaymentVerificationInput!): PaymentVerificationResult!
+}
+
+input CreateOrderInput {
+  items: [OrderItemInput!]!
+  addressId: String!
+  paymentMethod: PaymentMethod!
+  couponCode: String
+}
+
+input OrderItemInput {
+  productId: String!
+  quantity: Int!
+  isEbook: Boolean!
+}
+
+input PaymentVerificationInput {
+  orderId: String!
+  paymentId: String!
+  signature: String!
+}
+
+type PaymentVerificationResult {
+  success: Boolean!
+  message: String!
+  orderId: String!
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  ONLINE
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+type Order {
+  id: ID!
+  razorpayOrderId: String
+  total: Float!
+  status: OrderStatus!
+  paymentMethod: PaymentMethod!
+  paymentStatus: PaymentStatus!
+  address: String!
+  items: [OrderItem!]!
+  user: User!
+  coupon: Coupon
+  shipmentDetails: ShipmentDetails
+  createdAt: String!
+  updatedAt: String!
+}
+
+type OrderItem {
+  id: ID!
+  quantity: Int!
+  price: Float!
+  isEbook: Boolean!
+  product: Product!
+}
+
+type ShipmentDetails {
+  trackingId: String!
+  provider: String!
+  status: String!
+  trackingUrl: String
+  awbCode: String
+  orderId: String!
+  courierName: String!
+  estimatedDelivery: String
+}
